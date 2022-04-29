@@ -1,0 +1,14 @@
+[package]
+name = "yew-frontend-test"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yew = "0.18"
+anyhow = "1.0"
+serde_json = "1"
+serde = { version = "1.0", features = ["derive"] }
+uuid={ version="0.8", features=["v4", "serde"]}
+getrandom = { version = "0.2", features = ["js"] }

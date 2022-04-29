@@ -1,0 +1,1 @@
+A tiny little frontend web app written in Rust using the incredible `yew` library. Chats over websockets with a backend server.
