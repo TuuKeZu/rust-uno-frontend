@@ -1,0 +1,484 @@
+/* http://meyerweb.com/eric/tools/css/reset/ 
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    font: inherit;
+    vertical-align: baseline;
+}
+
+/* HTML5 display-role reset for older browsers */
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+    display: block;
+}
+
+body {
+    line-height: 1;
+    background-color: var(--background);
+    font-family: "Lucida Console", "Courier New", monospace;
+}
+
+ol,
+ul {
+    list-style: none;
+}
+
+blockquote,
+q {
+    quotes: none;
+}
+
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+    content: '';
+    content: none;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+
+:root {
+    --background: #121212;
+    --background-darker: #141414;
+    --background-lighter: #161616;
+    --shadow: rgba(0, 0, 0, 0.764);
+}
+
+.container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.connect-screen {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background-color: var(--background-lighter);
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    flex-direction: column;
+    border-radius: 5px;
+}
+
+.connect-screen h1 {
+    color: white;
+    font-size: 25px;
+    padding: 10px;
+}
+
+.connect-screen input {
+    background-color: var(--background-darker);
+    border: none;
+    padding: 15px;
+    border-radius: 5px;
+    font-size: 15px;
+    margin: 10px;
+    color: white;
+    font-style: italic;
+    width: 75%;
+}
+
+.connect-screen input:focus {
+    border: none !important;
+    outline: none !important;
+}
+
+.connect-screen button {
+    padding: 10px;
+    background-color: var(--background-darker);
+    border: none;
+    font-size: 15px;
+    color: white;
+    margin: 10px;
+    border-radius: 5px;
+}
+
+.connection-status {
+    color: rgba(128, 128, 128, 0.464);
+    transform: rotate(90deg);
+    position: absolute;
+    left: 0;
+    margin-left: -60px;
+    bottom: 85px;
+}
+
+.side-bar {
+    position: absolute;
+    left: 0;
+    height: 100%;
+    width: 200px;
+    background-color: rgba(0, 0, 0, 0.451);
+    z-index: 1;
+
+    display: flex;
+    flex-direction: column;
+
+}
+
+.waiting-screen {
+    width: 400px;
+    height: 300px;
+    background-color: var(--background-lighter);
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+
+    flex-direction: column;
+}
+
+.waiting-screen h1 {
+    color: white;
+    font-size: 20px;
+    padding: 10px;
+}
+
+.waiting-screen h5 {
+    color: gray;
+    font-size: 15px;
+    padding: 10px;
+}
+
+.waiting-screen p {
+    margin-top: 30px;
+    color: white;
+    font-size: 15px;
+    padding: 10px;
+}
+
+.waiting-screen Button {
+    margin-top: 30px;
+    color: white;
+    background-color: var(--background-darker);
+    border: none;
+    border-radius: 5px;
+    font-size: 15px;
+    padding: 15px;
+}
+
+
+.cards-container {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 220px;
+    background-color: var(--background-lighter);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cards-container h2 {
+    color: white;
+    position: absolute;
+    top: -60px;
+    font-size: 20px;
+}
+
+.card {
+    min-width: 120px;
+    max-width: 120px;
+    min-height: 185px;
+    max-height: 185px;
+    margin: 20px;
+
+    background-size: 132px 195px;
+    background-position: center center;
+    background-color: white;
+    border-radius: 7px;
+    box-shadow: 5px 5px;
+
+    color: var(--shadow);
+}
+
+#allowed:hover {
+    box-shadow: 10px 10px;
+    margin-top: 15px;
+    margin-left: 15px;
+    margin-right: 25px;
+}
+
+.place-card-text {
+    position: absolute;
+    top: -30px;
+    font-size: 15px;
+    opacity: 0%;
+    color: white;
+    transition: opacity .3s ease-in-out;
+}
+
+#allowed:hover~.place-card-text {
+    opacity: 100%;
+}
+
+#allowed {
+    opacity: 100%;
+}
+
+#disallowed {
+    box-shadow: 0px 0px;
+    opacity: 50%;
+}
+
+
+.card-desing {
+    min-width: 110px;
+    max-width: 110px;
+    min-height: 166px;
+    max-height: 166px;
+    background-color: whitesmoke;
+    border-radius: 5px;
+    box-shadow: 3px 3px;
+    position: absolute;
+    z-index: 1;
+
+    background-image: url(http://localhost/uno-api/cards/uno.png);
+    background-position: center center;
+    background-size: 120px 175px;
+
+    color: var(--shadow);
+}
+
+.card-desing:nth-child(2) {
+    transform: rotate(-15deg);
+    margin-right: 100px;
+    margin-top: 25px;
+    z-index: 2;
+}
+
+.card-desing:nth-child(1) {
+    transform: rotate(-30deg);
+    margin-right: 180px;
+    margin-top: 70px;
+}
+
+.card-desing:nth-child(3) {
+    z-index: 3;
+}
+
+
+.card-desing:nth-child(4) {
+    transform: rotate(15deg);
+    margin-right: -100px;
+    margin-top: 25px;
+    z-index: 2;
+}
+
+.card-desing:nth-child(5) {
+    transform: rotate(30deg);
+    margin-right: -180px;
+    margin-top: 70px;
+    z-index: 1;
+}
+
+
+.deck-container {
+    width: 400px;
+    height: 250px;
+
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    position: absolute;
+}
+
+.deck-container #deck {
+    position: absolute;
+    background-image: url(http://localhost/uno-api/cards/uno.png);
+    background-position: center center;
+    background-size: 130px 195px;
+    margin-right: 55%;
+
+    color: var(--shadow);
+}
+
+.deck-container #deck:nth-child(1) {
+    z-index: 3;
+    box-shadow: 4px 4px;
+}
+
+.deck-container #deck:nth-child(1):hover {
+    z-index: 3;
+    box-shadow: 8px 8px;
+    margin-left: 4px;
+    margin-top: 4px;
+}
+
+.draw-card-text {
+    position: absolute;
+    top: -30px;
+    font-size: 15px;
+    color: white;
+    margin-left: -45%;
+    opacity: 0;
+    text-align: center;
+
+    transition: opacity .4s ease-in-out;
+}
+
+.deck-container #deck:nth-child(1):hover~.draw-card-text {
+    opacity: 100%;
+}
+
+
+.deck-container #deck:nth-child(2) {
+    transform: rotate(-10deg);
+    z-index: 2;
+}
+
+.deck-container #deck:nth-child(3) {
+    transform: rotate(-20deg);
+    z-index: 1;
+}
+
+.deck-container #deck:nth-child(4) {
+    transform: rotate(-30deg);
+    z-index: 0;
+}
+
+.deck-container #placed-deck {
+    position: absolute;
+    margin-left: 55%;
+}
+
+
+
+.player-container {
+    position: absolute;
+    width: 400px;
+    height: 300px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.player-container h1 {
+    position: absolute;
+    top: 10px;
+    font-size: 20px;
+    color: white;
+}
+
+#player-1 {
+    top: 10px;
+}
+
+#player-2 {
+    left: 10px;
+}
+
+#player-3 {
+    right: 10px;
+}

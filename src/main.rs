@@ -1,10 +1,13 @@
 mod game;
 mod packets;
+use std::collections::HashMap;
+
 use anyhow::Error;
-use game::Card;
+use game::{Card, Player};
 use packets::*;
 use serde_json::Value;
 
+use uuid::Uuid;
 use yew::format::Text;
 use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
@@ -15,11 +18,16 @@ struct Model {
     link: ComponentLink<Self>,
     connected: bool,
     host: bool,
+    active: bool,
+    turn: bool,
     username: Option<String>,
     room_id: Option<String>,
     text: String,
     server_data: String,
-    cards: Vec<String>,
+    connections: HashMap<Uuid, Player>,
+    cards: Vec<Card>,
+    allowed_cards: Vec<Card>,
+    current: Option<Card>,
 }
 
 enum Msg {
@@ -45,11 +53,16 @@ impl Component for Model {
             link,
             connected: false,
             host: false,
+            active: false,
+            turn: false,
             username: None,
             room_id: Some("c05554ae-b4ee-4976-ac05-97aaf3c98a24".to_string()),
             text: String::new(),
             server_data: String::new(),
+            connections: HashMap::new(),
             cards: Vec::new(),
+            allowed_cards: Vec::new(),
+            current: None,
         }
     }
 
@@ -115,7 +128,6 @@ impl Component for Model {
                     task.send::<Text>(Text::into(Ok(StartPacket::to_json(StartPacket::new(
                         "None",
                     )))));
-                    self.connected = true;
                     true
                 }
                 None => false,
@@ -142,13 +154,40 @@ impl Component for Model {
                             "\"STATUS-UPDATE-PRIVATE\"" => {
                                 let p = PrivateGamePacket::try_parse(&s);
 
+                                if !self.active {
+                                    self.active = true;
+                                }
+
                                 if let Ok(packet) = p {
-                                    packet.cards.iter().for_each(|card| {
-                                        self.cards.push(format!("{}:{}", card.color, card.r#type))
-                                    });
+                                    self.cards = packet.cards.clone();
 
                                     self.server_data
-                                        .push_str(&format!("[CARDS]: {:#?}\n", packet.cards));
+                                        .push_str(&format!("[CARDS]: {:#?}\n", packet));
+                                }
+                            }
+                            "\"STATUS-UPDATE-PUBLIC\"" => {
+                                ConsoleService::log(&format!("[PUBLIC] {:#?}", &s));
+                                let p = PublicGamePacket::try_parse(&s);
+                                let count = self.connections.len();
+                                if let Ok(packet) = p {
+                                    // Insert connection to the connection list
+                                    if let std::collections::hash_map::Entry::Vacant(e) =
+                                        self.connections.entry(packet.id)
+                                    {
+                                        e.insert(Player::new(packet.username, packet.cards, count));
+                                    }
+
+                                    self.current = Some(packet.current);
+                                }
+                            }
+                            "\"ALLOWED-CARDS-UPDATE\"" => {
+                                ConsoleService::log(&format!("[ALLOWED CARDS] {:#?}", &s));
+
+                                let p = AllowedCardsPacket::try_parse(&s);
+                                if let Ok(packet) = p {
+                                    // Insert connection to the connection list
+                                    self.allowed_cards = packet.cards;
+                                    self.turn = true;
                                 }
                             }
                             "\"ERROR\"" => {}
@@ -181,38 +220,80 @@ impl Component for Model {
             // <div></div>
             <div class="container">
                 // login screen element
-                <div class="connect-screen" hidden={self.connected}>
-
+                <div class="connect-screen" style={format!("display: {}", if !self.connected {"flex"} else {"none"})}>
+                    <h1>{"Enter Room ID"}</h1>
                     // room id
-                    <p><input type="text" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/></p><br/>
+                    <input type="text" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/>    <br/>
 
                     // connect button
-                    <p><button disabled={self.room_id.is_none() ||self.room_id == Some("".to_string())} onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button></p><br/>
+                    <button disabled={self.room_id.is_none() ||self.room_id == Some("".to_string())} onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
 
+                    <h1 hidden={self.ws.is_none()}>{"Enter your username"}</h1>
                     // username
-                    <p><input type="text" value=self.username.clone() oninput=self.link.callback(|e: InputData| Msg::UsernameInput(e.value))/></p><br/>
+                    <input hidden={self.ws.is_none()} type="text" value=self.username.clone() oninput=self.link.callback(|e: InputData| Msg::UsernameInput(e.value))/>
 
-                    <p><button disabled={self.username.is_none() || self.username == Some("".to_string())} onclick=self.link.callback(|_| Msg::Register)>{ "Register" }</button></p><br/>
+                    <button hidden={self.ws.is_none()} disabled={self.username.is_none() || self.username == Some("".to_string())} onclick=self.link.callback(|_| Msg::Register)>{ "Register" }</button>
 
                     // text showing whether we're connected or not
-                    <p>{ "Connected: "}{ self.ws.is_some() } </p><br/>
+                    <p class="connection-status">{ "Connected: "}{ self.ws.is_some() } </p>
 
                 </div>
+                /*
+                <div class="player-container" id="player-1">
+                    <div class="card-desing" ></div>
+                    <div class="card-desing" ></div>
+                    <div class="card-desing" ></div>
+                    <div class="card-desing" ></div>
+                    <div class="card-desing" ></div>
+                    <h1>{"test-1"}</h1>
+                </div>
+                */
+                <div class="waiting-screen" style={format!("display: {}", if self.connected && !self.active {"flex"} else {"none"})} >
+                    <h1>{"Waiting for game to start"}</h1>
 
-                <div class="host-screen" hidden={!self.host}>
-                    <button onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
+                    <p hidden={!self.host}>{"You are the host"}</p>
+                    <button hidden={!self.host} onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
                 </div>
 
-                <div class="cards-container">
-                    { for self.cards.iter().map(|card| html! {<p style=format!("background-image: url(static/img/test.png); width: 100px; height: 100px;")></p>}) }
+                <div class="cards-container"  /*  style={format!("display: {}", if self.active {"flex"} else {"none"})} */>
+                    // <div class="card" id="allowed" style="background-image: url(http://localhost/uno-api/cards/Blue.Block.png);"></div>
+                    // <div class="card" id="disallowed" style="background-image: url(http://localhost/uno-api/cards/Red.Reverse.png);"></div>
+                    { for self.cards.iter().map(|card| html! {<div class="card" style=format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);", card.color, card.r#type) id={format!("{}", if self.allowed_cards.contains(card) {"allowed"} else {"disallowed"})}></div>}) }
+                    <h1 class="place-card-text">{"Place a card."}</h1>
+                    <h2  class="status-text">{if self.turn {"Your turn.".to_string()} else {"Waiting for the opponent".to_string()}}</h2>
                 </div>
 
-                // input box for sending text
-                <p><input type="text" value=self.text.clone() oninput=self.link.callback(|e: InputData| Msg::TextInput(e.value))/></p><br/>
-                // button for sending text
-                <p><button onclick=self.link.callback(|_| Msg::SendText)>{ "Send" }</button></p><br/>
-                // text area for showing data from the server
-                <p><textarea value=self.server_data.clone()></textarea></p><br/>
+                <div class="deck-container" style={format!("display: {}", if self.active {"flex"} else {"none"})} >
+                    <div class="card" id="deck"></div>
+                    <div class="card" id="deck"></div>
+                    <div class="card" id="deck"></div>
+                    <div class="card" id="deck"></div>
+                    <div class="card" id="placed-deck" style={if self.current.is_some() { format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);", self.current.clone().unwrap().color, self.current.clone().unwrap().r#type)} else {"http://localhost/uno-api/cards/uno.png);".to_string()}}></div>
+                    <h1 class="draw-card-text">{"Draw a card."}</h1>
+                </div>
+
+
+                { for self.connections.iter().map(|(_, v)| html! {
+                    <div class="player-container" id={format!("player-{}", v.index + 1)}>
+                        <div class="card-desing" ></div>
+                        <div class="card-desing" ></div>
+                        <div class="card-desing" ></div>
+                        <div class="card-desing" ></div>
+                        <div class="card-desing" ></div>
+                        <h1>{format!("{} : {}", &v.username, &v.card_count)}</h1>
+                    </div>
+                }) }
+
+
+                <div class="side-bar" >
+                    // input box for sending text
+                    <input type="text" value=self.text.clone() oninput=self.link.callback(|e: InputData| Msg::TextInput(e.value))/><br/>
+                    // button for sending text
+                    <p><button onclick=self.link.callback(|_| Msg::SendText)>{ "Send" }</button></p><br/>
+                    // text area for showing data from the server
+                    <p><textarea value=self.server_data.clone()></textarea></p><br/>
+
+                </div>
             </div>
         }
     }

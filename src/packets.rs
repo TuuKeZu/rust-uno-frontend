@@ -75,15 +75,17 @@ impl StartPacket {
 pub struct PublicGamePacket {
     pub r#type: String,
     pub id: Uuid,
+    pub username: String,
     pub cards: usize,
     pub current: Card,
 }
 
 impl PublicGamePacket {
-    pub fn new(id: Uuid, cards: usize, current: Card) -> PublicGamePacket {
+    pub fn new(id: Uuid, username: &str, cards: usize, current: Card) -> PublicGamePacket {
         PublicGamePacket {
             r#type: String::from("STATUS-UPDATE-PUBLIC"),
             id,
+            username: String::from(username),
             cards,
             current,
         }
