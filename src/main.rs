@@ -1,11 +1,11 @@
 mod game;
 mod packets;
-use std::collections::HashMap;
 
 use anyhow::Error;
 use game::{Card, Player};
 use packets::*;
 use serde_json::Value;
+use std::collections::HashMap;
 
 use uuid::Uuid;
 use yew::format::Text;
@@ -20,27 +20,30 @@ struct Model {
     host: bool,
     active: bool,
     turn: bool,
+    selecting: bool,
+    hovering: bool,
     username: Option<String>,
     room_id: Option<String>,
-    text: String,
     server_data: String,
     connections: HashMap<Uuid, Player>,
     cards: Vec<Card>,
     allowed_cards: Vec<Card>,
     current: Option<Card>,
 }
-
 enum Msg {
     Connect,
     Disconnected,
     Ignore,
     UsernameInput(String),
     RoomIDInput(String),
-    TextInput(String),
-    SendText,
     Register,
     StartGame,
     Received(Result<String, Error>),
+    PlaceCard(Card),
+    DrawCard,
+    EndTurn,
+    SwitchColor(String),
+    HoverCard(bool),
 }
 
 impl Component for Model {
@@ -55,9 +58,10 @@ impl Component for Model {
             host: false,
             active: false,
             turn: false,
+            selecting: false,
+            hovering: false,
             username: None,
             room_id: Some("c05554ae-b4ee-4976-ac05-97aaf3c98a24".to_string()),
-            text: String::new(),
             server_data: String::new(),
             connections: HashMap::new(),
             cards: Vec::new(),
@@ -94,10 +98,6 @@ impl Component for Model {
                 true
             }
             Msg::Ignore => false,
-            Msg::TextInput(e) => {
-                self.text = e;
-                true
-            }
             Msg::UsernameInput(e) => {
                 self.username = Some(e);
                 true
@@ -106,13 +106,6 @@ impl Component for Model {
                 self.room_id = Some(e);
                 true
             }
-            Msg::SendText => match self.ws {
-                Some(ref mut task) => {
-                    task.send::<Text>(Text::into(Ok(String::from(&self.text))));
-                    true
-                }
-                None => false,
-            },
             Msg::Register => match self.ws {
                 Some(ref mut task) => {
                     task.send::<Text>(Text::into(Ok(RegisterPacket::to_json(
@@ -148,7 +141,7 @@ impl Component for Model {
                                     }
 
                                     self.server_data
-                                        .push_str(&format!("[MESSAGE]: {}\n", packet.content));
+                                        .push_str(&format!("[MESSAGE] {:#?}", packet.content));
                                 }
                             }
                             "\"STATUS-UPDATE-PRIVATE\"" => {
@@ -162,14 +155,18 @@ impl Component for Model {
                                     self.cards = packet.cards.clone();
 
                                     self.server_data
-                                        .push_str(&format!("[CARDS]: {:#?}\n", packet));
+                                        .push_str(&format!("[CARDS] {:#?}", &packet.cards));
+
+                                    self.current = Some(packet.current);
                                 }
                             }
                             "\"STATUS-UPDATE-PUBLIC\"" => {
-                                ConsoleService::log(&format!("[PUBLIC] {:#?}", &s));
                                 let p = PublicGamePacket::try_parse(&s);
                                 let count = self.connections.len();
+
                                 if let Ok(packet) = p {
+                                    self.server_data
+                                        .push_str(&format!("[CURRENT] {:#?}", packet.current));
                                     // Insert connection to the connection list
                                     if let std::collections::hash_map::Entry::Vacant(e) =
                                         self.connections.entry(packet.id)
@@ -177,14 +174,17 @@ impl Component for Model {
                                         e.insert(Player::new(packet.username, packet.cards, count));
                                     }
 
+                                    self.connections.get_mut(&packet.id).unwrap().card_count =
+                                        packet.cards;
+
                                     self.current = Some(packet.current);
                                 }
                             }
                             "\"ALLOWED-CARDS-UPDATE\"" => {
-                                ConsoleService::log(&format!("[ALLOWED CARDS] {:#?}", &s));
-
                                 let p = AllowedCardsPacket::try_parse(&s);
                                 if let Ok(packet) = p {
+                                    self.server_data
+                                        .push_str(&format!("[ALLOWED] {:#?}", packet.cards));
                                     // Insert connection to the connection list
                                     self.allowed_cards = packet.cards;
                                     self.turn = true;
@@ -202,10 +202,58 @@ impl Component for Model {
                 true
             }
             Msg::Received(Err(s)) => {
-                self.server_data.push_str(&format!(
-                    "Error when reading from server: {}\n",
-                    &s.to_string()
-                ));
+                self.server_data.push_str(&format!("[ERROR] {:#?}", &s));
+                true
+            }
+            Msg::PlaceCard(card) => {
+                let index = self.cards.iter().position(|c| c == &card).unwrap();
+
+                let p = PlaceCardPacket::new(index);
+
+                if let Some(ref mut task) = self.ws {
+                    task.send::<Text>(Text::into(Ok(PlaceCardPacket::to_json(p))));
+                }
+
+                if card.r#type == "Switch" || card.r#type == "DrawFour" {
+                    self.selecting = true;
+                    self.turn = false;
+                }
+
+                true
+            }
+            Msg::DrawCard => {
+                ConsoleService::log("drawing a card");
+                let p = DrawPacket::new(1);
+
+                if let Some(ref mut task) = self.ws {
+                    task.send::<Text>(Text::into(Ok(DrawPacket::to_json(p))));
+                }
+
+                true
+            }
+            Msg::EndTurn => {
+                let p = EndTurnPacket::new();
+                ConsoleService::log("Ending turn..");
+                if let Some(ref mut task) = self.ws {
+                    task.send::<Text>(Text::into(Ok(EndTurnPacket::to_json(p))));
+                    self.turn = false;
+                    self.allowed_cards.clear();
+                }
+
+                true
+            }
+            Msg::SwitchColor(color) => {
+                let p = ColorSwitchPacket::new(color);
+
+                if let Some(ref mut task) = self.ws {
+                    task.send::<Text>(Text::into(Ok(ColorSwitchPacket::to_json(p))));
+                    self.selecting = false;
+                }
+
+                true
+            }
+            Msg::HoverCard(active) => {
+                self.hovering = active;
                 true
             }
         }
@@ -223,12 +271,13 @@ impl Component for Model {
                 <div class="connect-screen" style={format!("display: {}", if !self.connected {"flex"} else {"none"})}>
                     <h1>{"Enter Room ID"}</h1>
                     // room id
-                    <input type="text" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/>    <br/>
+                    <input type="text" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/><br/>
 
                     // connect button
                     <button disabled={self.room_id.is_none() ||self.room_id == Some("".to_string())} onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
 
                     <h1 hidden={self.ws.is_none()}>{"Enter your username"}</h1>
+
                     // username
                     <input hidden={self.ws.is_none()} type="text" value=self.username.clone() oninput=self.link.callback(|e: InputData| Msg::UsernameInput(e.value))/>
 
@@ -238,16 +287,7 @@ impl Component for Model {
                     <p class="connection-status">{ "Connected: "}{ self.ws.is_some() } </p>
 
                 </div>
-                /*
-                <div class="player-container" id="player-1">
-                    <div class="card-desing" ></div>
-                    <div class="card-desing" ></div>
-                    <div class="card-desing" ></div>
-                    <div class="card-desing" ></div>
-                    <div class="card-desing" ></div>
-                    <h1>{"test-1"}</h1>
-                </div>
-                */
+
                 <div class="waiting-screen" style={format!("display: {}", if self.connected && !self.active {"flex"} else {"none"})} >
                     <h1>{"Waiting for game to start"}</h1>
 
@@ -255,23 +295,46 @@ impl Component for Model {
                     <button hidden={!self.host} onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
                 </div>
 
-                <div class="cards-container"  /*  style={format!("display: {}", if self.active {"flex"} else {"none"})} */>
-                    // <div class="card" id="allowed" style="background-image: url(http://localhost/uno-api/cards/Blue.Block.png);"></div>
-                    // <div class="card" id="disallowed" style="background-image: url(http://localhost/uno-api/cards/Red.Reverse.png);"></div>
-                    { for self.cards.iter().map(|card| html! {<div class="card" style=format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);", card.color, card.r#type) id={format!("{}", if self.allowed_cards.contains(card) {"allowed"} else {"disallowed"})}></div>}) }
-                    <h1 class="place-card-text">{"Place a card."}</h1>
-                    <h2  class="status-text">{if self.turn {"Your turn.".to_string()} else {"Waiting for the opponent".to_string()}}</h2>
-                </div>
+                <div class="cards-container" /*  style={format!("display: {}", if self.active {"flex"} else {"none"})}*/ >
+                    // <button onmouseover=self.link.callback(|_| Msg::HoverCard(true))  onmouseout=self.link.callback(|_| Msg::HoverCard(false)) class="card" id="allowed" style="background-image: url(http://localhost/uno-api/cards/Blue.Block.png);"></button>
+                    // <button class="card" id="disallowed" style="background-image: url(http://localhost/uno-api/cards/Red.Reverse.png);" disabled={true}></button>
+                    { for self.cards.iter().to_owned().map(|card| {
+                        let c = card.clone();
+                        html! {
+                            <button
+                                class="card"
+                                onclick=self.link.callback(move |_|  Msg::PlaceCard(c.clone()) )
+                                onmouseover=self.link.callback(|_| Msg::HoverCard(true))  onmouseout=self.link.callback(|_| Msg::HoverCard(false))
+                                style=format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);", card.color, card.r#type)
+                                id={(if self.allowed_cards.contains(card) {"allowed"} else {"disallowed"}).to_string()}
+                                disabled={!self.allowed_cards.contains(card)} >
+                            </button>
+                            }
+                        })
+                    }
+                    </div>
+                    <h2 id="status-text"> { if self.turn{"Your turn.".to_string()} else {"Waiting for the opponent".to_string()} }</h2>
+                    <h1 style={ if self.hovering {"opacity: 100%;"} else {"opacity: 0;"}} id="place-card-text">{"Place a card."}</h1>
+                // End turn button
+                <button onclick=self.link.callback(|_| Msg::EndTurn) class="end-turn-button" /*  style={format!("display: {}", if self.active {"flex"} else {"none"})} */ ><h1>{"End your turn"}</h1></button>
 
                 <div class="deck-container" style={format!("display: {}", if self.active {"flex"} else {"none"})} >
-                    <div class="card" id="deck"></div>
-                    <div class="card" id="deck"></div>
-                    <div class="card" id="deck"></div>
-                    <div class="card" id="deck"></div>
-                    <div class="card" id="placed-deck" style={if self.current.is_some() { format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);", self.current.clone().unwrap().color, self.current.clone().unwrap().r#type)} else {"http://localhost/uno-api/cards/uno.png);".to_string()}}></div>
+                    <button class="card" id="deck" onclick=self.link.callback(|_| Msg::DrawCard)> </button>
+                    <button class="card" id="deck"></button>
+                    <button class="card" id="deck"></button>
+                    <button class="card" id="deck"></button>
+                    <div
+                        class="card" id="placed-deck" style={
+                            if self.current.is_some(){
+                                format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);",
+                                self.current.clone().unwrap().color, self.current.clone().unwrap().r#type)
+                            } else {
+                                "http://localhost/uno-api/cards/uno.png);".to_string()
+                            }
+                        } >
+                    </div>
                     <h1 class="draw-card-text">{"Draw a card."}</h1>
                 </div>
-
 
                 { for self.connections.iter().map(|(_, v)| html! {
                     <div class="player-container" id={format!("player-{}", v.index + 1)}>
@@ -284,16 +347,20 @@ impl Component for Model {
                     </div>
                 }) }
 
+                <div class="color-selector" style={format!("display: {}", if self.selecting {"flex"} else {"none"})}>
+                    <h1>{"Select the color you want to switch to"}</h1>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Yellow".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Yellow.png"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Red".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Red.png"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Blue".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Blue.png"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Green".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Green.png"></button>
+                </div>
+
 
                 <div class="side-bar" >
-                    // input box for sending text
-                    <input type="text" value=self.text.clone() oninput=self.link.callback(|e: InputData| Msg::TextInput(e.value))/><br/>
-                    // button for sending text
-                    <p><button onclick=self.link.callback(|_| Msg::SendText)>{ "Send" }</button></p><br/>
                     // text area for showing data from the server
-                    <p><textarea value=self.server_data.clone()></textarea></p><br/>
-
+                    <textarea>{self.server_data.to_string()}</textarea>
                 </div>
+
             </div>
         }
     }

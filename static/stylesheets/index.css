@@ -142,6 +142,10 @@ table {
     --background-darker: #141414;
     --background-lighter: #161616;
     --shadow: rgba(0, 0, 0, 0.764);
+    --yellow: #FFAA00;
+    --red: #FF5555;
+    --blue: #5555FF;
+    --green: #55AA55;
 }
 
 .container {
@@ -203,7 +207,7 @@ table {
 
 .connection-status {
     color: rgba(128, 128, 128, 0.464);
-    transform: rotate(90deg);
+    transform: rotate(-90deg);
     position: absolute;
     left: 0;
     margin-left: -60px;
@@ -214,13 +218,43 @@ table {
     position: absolute;
     left: 0;
     height: 100%;
-    width: 200px;
-    background-color: rgba(0, 0, 0, 0.451);
-    z-index: 1;
+    width: 250px;
+    z-index: 10;
 
     display: flex;
     flex-direction: column;
+    align-items: center;
+}
 
+#white {
+    color: white;
+}
+
+#gray {
+    color: rgb(73, 73, 73);
+}
+
+#green {
+    color: var(--green);
+}
+
+#yellow {
+    color: var(--yellow);
+}
+
+#red {
+    color: var(--red);
+}
+
+.side-bar textarea {
+    width: 240px;
+    height: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+
+    background-color: rgba(0, 0, 0, 0.283);
+    color: white;
 }
 
 .waiting-screen {
@@ -268,20 +302,58 @@ table {
 .cards-container {
     position: absolute;
     bottom: 0;
-    width: 100%;
-    height: 220px;
+    width: 87%;
+    max-width: 2000px;
+    height: 320px;
     background-color: var(--background-lighter);
 
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: visible;
+    flex-wrap: wrap;
+    overflow-y: scroll;
 }
 
-.cards-container h2 {
+#status-text {
     color: white;
     position: absolute;
-    top: -60px;
     font-size: 20px;
+    bottom: 360px;
+}
+
+.end-turn-button {
+    background-color: var(--background-lighter);
+    color: white;
+
+    border: 0ch;
+
+    position: absolute;
+    bottom: 0;
+    right: 0.5%;
+    width: 5%;
+    max-width: 100px;
+    min-width: 70px;
+    height: 320px;
+    overflow: hidden;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.end-turn-button:hover {
+    color: rgba(255, 255, 255, 0.621);
+}
+
+.end-turn-button h1 {
+    position: absolute;
+    transform: rotate(-90deg);
+    width: 220px;
+    font-size: 22px;
+
+    transition: color .3s ease-in-out;
 }
 
 .card {
@@ -290,6 +362,8 @@ table {
     min-height: 185px;
     max-height: 185px;
     margin: 20px;
+
+    border: none;
 
     background-size: 132px 195px;
     background-position: center center;
@@ -307,16 +381,16 @@ table {
     margin-right: 25px;
 }
 
-.place-card-text {
+#place-card-text {
     position: absolute;
-    top: -30px;
+    bottom: 332px;
     font-size: 15px;
-    opacity: 0%;
+    opacity: 0;
     color: white;
     transition: opacity .3s ease-in-out;
 }
 
-#allowed:hover~.place-card-text {
+#allowed:hover>.place-card-text {
     opacity: 100%;
 }
 
@@ -420,7 +494,7 @@ table {
     top: -30px;
     font-size: 15px;
     color: white;
-    margin-left: -45%;
+    margin-left: -47%;
     opacity: 0;
     text-align: center;
 
@@ -481,4 +555,49 @@ table {
 
 #player-3 {
     right: 10px;
+}
+
+.color-selector {
+    width: 640px;
+    height: 200px;
+    position: absolute;
+    bottom: 300px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.color-selector h1 {
+    position: absolute;
+    top: -30px;
+    font-size: 20px;
+    color: white;
+}
+
+#color:hover {
+    margin-left: 15px;
+    margin-right: 25px;
+    margin-top: 25px;
+    box-shadow: 10px 10px;
+}
+
+/* width */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+    background: var(--background-darker);
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: rgb(35, 35, 35);
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(55, 55, 55);
 }

@@ -1,17 +1,19 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Card {
     pub r#type: String,
     pub color: String,
+    pub owner: Option<Uuid>,
 }
 
 impl Card {
-    pub fn new(r#type: &str, color: &str) -> Card {
+    pub fn new(r#type: &str, color: &str, owner: Uuid) -> Card {
         Card {
             r#type: r#type.to_string(),
             color: color.to_string(),
+            owner: Some(owner),
         }
     }
 }

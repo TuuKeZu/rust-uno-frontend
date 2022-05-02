@@ -157,9 +157,13 @@ pub struct DrawPacket {
 impl DrawPacket {
     pub fn new(amount: u8) -> DrawPacket {
         DrawPacket {
-            r#type: "DRAW-CARD".to_string(),
-            amount: amount,
+            r#type: "DRAW-CARDS".to_string(),
+            amount,
         }
+    }
+
+    pub fn to_json(data: DrawPacket) -> String {
+        serde_json::to_string(&data).unwrap()
     }
 
     pub fn try_parse(data: &str) -> Result<DrawPacket> {
@@ -184,6 +188,10 @@ impl PlaceCardPacket {
     pub fn try_parse(data: &str) -> Result<PlaceCardPacket> {
         serde_json::from_str(data)
     }
+
+    pub fn to_json(data: PlaceCardPacket) -> String {
+        serde_json::to_string(&data).unwrap()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -194,11 +202,37 @@ pub struct EndTurnPacket {
 impl EndTurnPacket {
     pub fn new() -> EndTurnPacket {
         EndTurnPacket {
-            r#type: "ENd-TURN".to_string(),
+            r#type: "END-TURN".to_string(),
         }
+    }
+
+    pub fn to_json(data: EndTurnPacket) -> String {
+        serde_json::to_string(&data).unwrap()
     }
 
     pub fn try_parse(data: &str) -> Result<EndTurnPacket> {
         serde_json::from_str(data)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ColorSwitchPacket {
+    pub r#type: String,
+    pub color: String,
+}
+
+impl ColorSwitchPacket {
+    pub fn new(color: String) -> ColorSwitchPacket {
+        ColorSwitchPacket {
+            r#type: String::from("COLOR-SWITCH"),
+            color,
+        }
+    }
+    pub fn try_parse(data: &str) -> Result<ColorSwitchPacket> {
+        serde_json::from_str(data)
+    }
+
+    pub fn to_json(data: ColorSwitchPacket) -> String {
+        serde_json::to_string(&data).unwrap()
     }
 }
