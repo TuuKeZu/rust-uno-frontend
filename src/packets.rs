@@ -181,7 +181,7 @@ impl PlaceCardPacket {
     pub fn new(index: usize) -> PlaceCardPacket {
         PlaceCardPacket {
             r#type: "PLACE-CARD".to_string(),
-            index: index,
+            index,
         }
     }
 
