@@ -190,6 +190,13 @@ impl Component for Model {
                                     self.turn = true;
                                 }
                             }
+                            "\"End-TURN\"" => {
+                                let p = EndTurnPacket::try_parse(&s);
+                                if let Ok(packet) = p {
+                                    ConsoleService::log("[MESSAGE] Your turn has ended.");
+                                    self.turn = false;
+                                }
+                            }
                             "\"ERROR\"" => {}
                             _ => ConsoleService::log("Unknown packet received"),
                         }
@@ -216,7 +223,6 @@ impl Component for Model {
 
                 if card.r#type == "Switch" || card.r#type == "DrawFour" {
                     self.selecting = true;
-                    self.turn = false;
                 }
 
                 true
@@ -236,7 +242,6 @@ impl Component for Model {
                 ConsoleService::log("Ending turn..");
                 if let Some(ref mut task) = self.ws {
                     task.send::<Text>(Text::into(Ok(EndTurnPacket::to_json(p))));
-                    self.turn = false;
                     self.allowed_cards.clear();
                 }
 
@@ -295,9 +300,9 @@ impl Component for Model {
                     <button hidden={!self.host} onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
                 </div>
 
-                <div class="cards-container" /*  style={format!("display: {}", if self.active {"flex"} else {"none"})}*/ >
+                <div class="cards-container"   style={format!("display: {}", if self.active {"flex"} else {"none"})} >
                     // <button onmouseover=self.link.callback(|_| Msg::HoverCard(true))  onmouseout=self.link.callback(|_| Msg::HoverCard(false)) class="card" id="allowed" style="background-image: url(http://localhost/uno-api/cards/Blue.Block.png);"></button>
-                    // <button class="card" id="disallowed" style="background-image: url(http://localhost/uno-api/cards/Red.Reverse.png);" disabled={true}></button>
+                    // <button class="card" id="disallowed" style="background-image: url(static/img/Blue.DrawFour.svg);" disabled={true}></button>
                     { for self.cards.iter().to_owned().map(|card| {
                         let c = card.clone();
                         html! {
@@ -305,7 +310,7 @@ impl Component for Model {
                                 class="card"
                                 onclick=self.link.callback(move |_|  Msg::PlaceCard(c.clone()) )
                                 onmouseover=self.link.callback(|_| Msg::HoverCard(true))  onmouseout=self.link.callback(|_| Msg::HoverCard(false))
-                                style=format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);", card.color, card.r#type)
+                                style=format!("background-image: url(static/img/{}.{}.svg);", card.color, card.r#type)
                                 id={(if self.allowed_cards.contains(card) {"allowed"} else {"disallowed"}).to_string()}
                                 disabled={!self.allowed_cards.contains(card)} >
                             </button>
@@ -313,23 +318,23 @@ impl Component for Model {
                         })
                     }
                     </div>
-                    <h2 id="status-text"> { if self.turn{"Your turn.".to_string()} else {"Waiting for the opponent".to_string()} }</h2>
+                    <h2 hidden={!self.connected} id="status-text"> { if self.turn && !self.selecting{"Your turn.".to_string()} else {"Waiting for the opponent".to_string()} }</h2>
                     <h1 style={ if self.hovering {"opacity: 100%;"} else {"opacity: 0;"}} id="place-card-text">{"Place a card."}</h1>
                 // End turn button
-                <button onclick=self.link.callback(|_| Msg::EndTurn) class="end-turn-button" /*  style={format!("display: {}", if self.active {"flex"} else {"none"})} */ ><h1>{"End your turn"}</h1></button>
+                <button onclick=self.link.callback(|_| Msg::EndTurn) class="end-turn-button" style={format!("display: {}", if self.active {"flex"} else {"none"})} ><h1>{"End your turn"}</h1></button>
 
-                <div class="deck-container" style={format!("display: {}", if self.active {"flex"} else {"none"})} >
-                    <button class="card" id="deck" onclick=self.link.callback(|_| Msg::DrawCard)> </button>
-                    <button class="card" id="deck"></button>
-                    <button class="card" id="deck"></button>
-                    <button class="card" id="deck"></button>
+                <div class="deck-container" style={format!("display: {}", if self.active {"flex"} else {"none"})}  >
+                    <button class="card" id="deck" onclick=self.link.callback(|_| Msg::DrawCard)><div class="logo"></div></button>
+                    <button class="card" id="deck"><div class="logo"></div></button>
+                    <button class="card" id="deck"><div class="logo"></div></button>
+                    <button class="card" id="deck"><div class="logo"></div></button>
                     <div
                         class="card" id="placed-deck" style={
                             if self.current.is_some(){
-                                format!("background-image: url(http://localhost/uno-api/cards/{}.{}.png);",
+                                format!("background-image: url(static/img/{}.{}.svg);",
                                 self.current.clone().unwrap().color, self.current.clone().unwrap().r#type)
                             } else {
-                                "http://localhost/uno-api/cards/uno.png);".to_string()
+                                "static/img/uno.svg);".to_string()
                             }
                         } >
                     </div>
@@ -338,21 +343,21 @@ impl Component for Model {
 
                 { for self.connections.iter().map(|(_, v)| html! {
                     <div class="player-container" id={format!("player-{}", v.index + 1)}>
-                        <div class="card-desing" ></div>
-                        <div class="card-desing" ></div>
-                        <div class="card-desing" ></div>
-                        <div class="card-desing" ></div>
-                        <div class="card-desing" ></div>
+                        <div class="card-desing" ><div class="logo"></div></div>
+                        <div class="card-desing" ><div class="logo"></div></div>
+                        <div class="card-desing" ><div class="logo"></div></div>
+                        <div class="card-desing" ><div class="logo"></div></div>
+                        <div class="card-desing" ><div class="logo"></div></div>
                         <h1>{format!("{} : {}", &v.username, &v.card_count)}</h1>
                     </div>
                 }) }
 
                 <div class="color-selector" style={format!("display: {}", if self.selecting {"flex"} else {"none"})}>
                     <h1>{"Select the color you want to switch to"}</h1>
-                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Yellow".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Yellow.png"></button>
-                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Red".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Red.png"></button>
-                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Blue".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Blue.png"></button>
-                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Green".to_string())) class="card" id="color" style="background-image: url(http://localhost/uno-api/cards/Selector.Green.png"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Yellow".to_string())) class="card" id="color" style="background-image: url(static/img/Selector.Yellow.svg"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Red".to_string())) class="card" id="color" style="background-image: url(static/img/Selector.Red.svg"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Blue".to_string())) class="card" id="color" style="background-image: url(static/img/Selector.Blue.svg"></button>
+                    <button onclick=self.link.callback(|_| Msg::SwitchColor("Green".to_string())) class="card" id="color" style="background-image: url(static/img/Selector.Green.svg"></button>
                 </div>
 
 

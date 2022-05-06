@@ -415,11 +415,37 @@ table {
     position: absolute;
     z-index: 1;
 
-    background-image: url(http://localhost/uno-api/cards/uno.png);
+    background-image: url(static/img/Uno.svg);
     background-position: center center;
     background-size: 120px 175px;
 
     color: var(--shadow);
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.logo {
+    width: 80px;
+    height: 40px;
+    background-image: url(static/img/logo.svg);
+    background-size: contain;
+
+    /* animation-duration: 5000ms; */
+    /* animation-name: Spin; */
+    /* animation-timing-function: linear; */
+    /* animation-iteration-count: infinite; */
+}
+
+@keyframes Spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .card-desing:nth-child(2) {
@@ -469,12 +495,15 @@ table {
 
 .deck-container #deck {
     position: absolute;
-    background-image: url(http://localhost/uno-api/cards/uno.png);
+    background-image: url(static/img/Uno.svg);
     background-position: center center;
     background-size: 130px 195px;
     margin-right: 55%;
 
     color: var(--shadow);
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .deck-container #deck:nth-child(1) {
@@ -566,6 +595,7 @@ table {
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 4;
 }
 
 .color-selector h1 {
