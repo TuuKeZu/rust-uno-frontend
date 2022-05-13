@@ -23,6 +23,8 @@ pub struct Player {
     pub username: String,
     pub card_count: usize,
     pub index: usize,
+    pub turn: bool,
+    pub next: bool,
 }
 
 impl Player {
@@ -31,6 +33,8 @@ impl Player {
             username,
             card_count,
             index,
+            turn: false,
+            next: false,
         }
     }
 }

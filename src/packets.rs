@@ -27,6 +27,54 @@ impl RegisterPacket {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ConnectPacket {
+    pub r#type: String,
+    pub id: Uuid,
+    pub username: String,
+}
+
+impl ConnectPacket {
+    pub fn new(id: Uuid, username: &str) -> ConnectPacket {
+        ConnectPacket {
+            r#type: String::from("CONNECT"),
+            id,
+            username: String::from(username),
+        }
+    }
+    pub fn try_parse(data: &str) -> Result<ConnectPacket> {
+        serde_json::from_str(data)
+    }
+
+    pub fn to_json(data: ConnectPacket) -> String {
+        serde_json::to_string(&data).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisconnectPacket {
+    pub r#type: String,
+    pub id: Uuid,
+    pub username: String,
+}
+
+impl DisconnectPacket {
+    pub fn new(id: Uuid, username: &str) -> DisconnectPacket {
+        DisconnectPacket {
+            r#type: String::from("DISCONNECT"),
+            id,
+            username: String::from(username),
+        }
+    }
+    pub fn try_parse(data: &str) -> Result<DisconnectPacket> {
+        serde_json::from_str(data)
+    }
+
+    pub fn to_json(data: DisconnectPacket) -> String {
+        serde_json::to_string(&data).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MessagePacket {
     pub r#type: String,
     pub content: String,
@@ -234,5 +282,54 @@ impl ColorSwitchPacket {
 
     pub fn to_json(data: ColorSwitchPacket) -> String {
         serde_json::to_string(&data).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TurnUpdatePacket {
+    pub r#type: String,
+    pub id: Uuid,
+    pub next: Uuid,
+}
+
+impl TurnUpdatePacket {
+    pub fn new(id: Uuid, next: Uuid) -> TurnUpdatePacket {
+        TurnUpdatePacket {
+            r#type: String::from("UPDATE-TURN"),
+            id,
+            next,
+        }
+    }
+    pub fn try_parse(data: &str) -> Result<TurnUpdatePacket> {
+        serde_json::from_str(data)
+    }
+
+    pub fn to_json(data: TurnUpdatePacket) -> String {
+        serde_json::to_string(&data).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct HTMLError {
+    pub r#type: String,
+    pub status_code: u64,
+    pub body: String,
+}
+
+impl HTMLError {
+    pub fn to_json(err: HTMLError) -> String {
+        serde_json::to_string(&err).unwrap()
+    }
+
+    pub fn try_parse(data: &str) -> Result<HTMLError> {
+        serde_json::from_str(data)
+    }
+
+    pub fn new(status_code: u64, body: &str) -> HTMLError {
+        HTMLError {
+            r#type: String::from("ERROR"),
+            status_code,
+            body: String::from(body),
+        }
     }
 }

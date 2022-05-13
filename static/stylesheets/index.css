@@ -146,6 +146,7 @@ table {
     --red: #FF5555;
     --blue: #5555FF;
     --green: #55AA55;
+    --disabled: #ff5555;
 }
 
 .container {
@@ -203,6 +204,10 @@ table {
     color: white;
     margin: 10px;
     border-radius: 5px;
+}
+
+.connect-screen button:disabled {
+    color: var(--disabled)
 }
 
 .connection-status {
@@ -296,6 +301,10 @@ table {
     border-radius: 5px;
     font-size: 15px;
     padding: 15px;
+}
+
+.waiting-screen Button:disabled {
+    color: var(--disabled);
 }
 
 
@@ -448,39 +457,6 @@ table {
     }
 }
 
-.card-desing:nth-child(2) {
-    transform: rotate(-15deg);
-    margin-right: 100px;
-    margin-top: 25px;
-    z-index: 2;
-}
-
-.card-desing:nth-child(1) {
-    transform: rotate(-30deg);
-    margin-right: 180px;
-    margin-top: 70px;
-}
-
-.card-desing:nth-child(3) {
-    z-index: 3;
-}
-
-
-.card-desing:nth-child(4) {
-    transform: rotate(15deg);
-    margin-right: -100px;
-    margin-top: 25px;
-    z-index: 2;
-}
-
-.card-desing:nth-child(5) {
-    transform: rotate(30deg);
-    margin-right: -180px;
-    margin-top: 70px;
-    z-index: 1;
-}
-
-
 .deck-container {
     width: 400px;
     height: 250px;
@@ -556,35 +532,70 @@ table {
 }
 
 
-
-.player-container {
+.player-list {
+    width: 310px;
+    height: 400px;
     position: absolute;
-    width: 400px;
-    height: 300px;
+    top: 20px;
+    right: 20px;
+
+    background-color: var(--background-lighter);
 
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: flex-start;
+    flex-direction: column;
+
+    overflow-y: scroll;
 }
 
-.player-container h1 {
-    position: absolute;
-    top: 10px;
+.player-object {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 90%;
+}
+
+.player-detail {
+    height: 90%;
+    background-image: url('/static/img/Uno.svg');
+    background-size: contain;
+    height: 40px;
+    width: 40px;
+    background-repeat: no-repeat;
+    margin: 5px;
+}
+
+.player-object h2 {
+    color: rgba(255, 255, 255, 0.555);
+    margin: 10px;
+    margin-left: -5px;
     font-size: 20px;
+}
+
+.player-object h1 {
     color: white;
+    margin: 10px;
+    font-size: 20px;
 }
 
-#player-1 {
-    top: 10px;
+
+.player-object h3 {
+    color: rgba(255, 255, 255, 0.555);
+    font-size: 20px;
 }
 
-#player-2 {
-    left: 10px;
+.player-object h4 {
+    color: var(--green);
+    font-size: 20px;
 }
 
-#player-3 {
-    right: 10px;
+#player-self {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: solid 3px rgb(39, 39, 39);
 }
+
 
 .color-selector {
     width: 640px;
