@@ -4,15 +4,36 @@ use serde_json::Result;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type", content = "data")]
+pub enum PacketType {
+    Register(String),                              // username
+    GameData(Uuid, String, Vec<(Uuid, String)>),   // self_id, self_username, Vec<(id, username)>
+    Connect(Uuid, String),                         // id, username
+    Disconnect(Uuid, String),                      // id, username
+    Message(String),                               // content
+    StartGame(String),                             // option
+    StatusUpdatePublic(Uuid, String, usize, Card), // id, username, card-count, current
+    StatusUpdatePrivate(Vec<Card>, Card),          // cards, current
+    AllowedCardsUpdate(Vec<Card>),                 // allowed-cards
+    DrawCard(u8),                                  // amount
+    PlaceCard(usize),                              // index
+    EndTurn,                                       //
+    ColorSwitch(String),                           // color
+    TurnUpdate(Uuid, Uuid),                        // current, next
+    Error(u64, String),                            // error-code, body
+}
+
+/*
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RegisterPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub username: String,
 }
 
 impl RegisterPacket {
     pub fn new(username: &str) -> RegisterPacket {
         RegisterPacket {
-            r#type: "REGISTER".to_string(),
+            r#type: PacketType::Register,
             username: username.to_string(),
         }
     }
@@ -25,10 +46,43 @@ impl RegisterPacket {
         serde_json::to_string(&data).unwrap()
     }
 }
+*/
+
+/*
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GameDataPacket {
+    pub r#type: PacketType,
+    pub self_id: Uuid,
+    pub self_username: String,
+    pub connections: Vec<(Uuid, String)>,
+}
+
+impl GameDataPacket {
+    pub fn new(
+        self_id: Uuid,
+        self_username: &str,
+        connections: Vec<(Uuid, String)>,
+    ) -> GameDataPacket {
+        GameDataPacket {
+            r#type: PacketType::GameData,
+            self_id,
+            self_username: String::from(self_username),
+            connections,
+        }
+    }
+
+    pub fn try_parse(data: &str) -> Result<GameDataPacket> {
+        serde_json::from_str(data)
+    }
+
+    pub fn to_json(data: GameDataPacket) -> String {
+        serde_json::to_string(&data).unwrap()
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ConnectPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub id: Uuid,
     pub username: String,
 }
@@ -36,7 +90,7 @@ pub struct ConnectPacket {
 impl ConnectPacket {
     pub fn new(id: Uuid, username: &str) -> ConnectPacket {
         ConnectPacket {
-            r#type: String::from("CONNECT"),
+            r#type: PacketType::Connect,
             id,
             username: String::from(username),
         }
@@ -52,7 +106,7 @@ impl ConnectPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DisconnectPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub id: Uuid,
     pub username: String,
 }
@@ -60,7 +114,7 @@ pub struct DisconnectPacket {
 impl DisconnectPacket {
     pub fn new(id: Uuid, username: &str) -> DisconnectPacket {
         DisconnectPacket {
-            r#type: String::from("DISCONNECT"),
+            r#type: PacketType::Disconnect,
             id,
             username: String::from(username),
         }
@@ -76,14 +130,14 @@ impl DisconnectPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MessagePacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub content: String,
 }
 
 impl MessagePacket {
     pub fn new(content: &str) -> MessagePacket {
         MessagePacket {
-            r#type: String::from("MESSAGE"),
+            r#type: PacketType::Message,
             content: String::from(content),
         }
     }
@@ -98,14 +152,14 @@ impl MessagePacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StartPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub options: String,
 }
 
 impl StartPacket {
     pub fn new(options: &str) -> StartPacket {
         StartPacket {
-            r#type: "START-GAME".to_string(),
+            r#type: PacketType::StartGame,
             options: options.to_string(),
         }
     }
@@ -121,7 +175,7 @@ impl StartPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PublicGamePacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub id: Uuid,
     pub username: String,
     pub cards: usize,
@@ -131,7 +185,7 @@ pub struct PublicGamePacket {
 impl PublicGamePacket {
     pub fn new(id: Uuid, username: &str, cards: usize, current: Card) -> PublicGamePacket {
         PublicGamePacket {
-            r#type: String::from("STATUS-UPDATE-PUBLIC"),
+            r#type: PacketType::StatusUpdatePublic,
             id,
             username: String::from(username),
             cards,
@@ -150,7 +204,7 @@ impl PublicGamePacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PrivateGamePacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub cards: Vec<Card>,
     pub current: Card,
 }
@@ -158,7 +212,7 @@ pub struct PrivateGamePacket {
 impl PrivateGamePacket {
     pub fn new(cards: Vec<Card>, current: Card) -> PrivateGamePacket {
         PrivateGamePacket {
-            r#type: String::from("STATUS-UPDATE-PRIVATE"),
+            r#type: PacketType::StatusUpdatePrivate,
             cards,
             current,
         }
@@ -175,14 +229,14 @@ impl PrivateGamePacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AllowedCardsPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub cards: Vec<Card>,
 }
 
 impl AllowedCardsPacket {
     pub fn new(cards: Vec<Card>) -> AllowedCardsPacket {
         AllowedCardsPacket {
-            r#type: String::from("ALLOWED-CARDS-UPDATE"),
+            r#type: PacketType::AllowedCardsUpdate,
             cards,
         }
     }
@@ -198,14 +252,14 @@ impl AllowedCardsPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DrawPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub amount: u8,
 }
 
 impl DrawPacket {
     pub fn new(amount: u8) -> DrawPacket {
         DrawPacket {
-            r#type: "DRAW-CARDS".to_string(),
+            r#type: PacketType::DrawCard,
             amount,
         }
     }
@@ -221,14 +275,14 @@ impl DrawPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PlaceCardPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub index: usize,
 }
 
 impl PlaceCardPacket {
     pub fn new(index: usize) -> PlaceCardPacket {
         PlaceCardPacket {
-            r#type: "PLACE-CARD".to_string(),
+            r#type: PacketType::PlaceCard,
             index,
         }
     }
@@ -244,13 +298,13 @@ impl PlaceCardPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EndTurnPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
 }
 
 impl EndTurnPacket {
     pub fn new() -> EndTurnPacket {
         EndTurnPacket {
-            r#type: "END-TURN".to_string(),
+            r#type: PacketType::EndTurn,
         }
     }
 
@@ -265,14 +319,14 @@ impl EndTurnPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ColorSwitchPacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub color: String,
 }
 
 impl ColorSwitchPacket {
     pub fn new(color: String) -> ColorSwitchPacket {
         ColorSwitchPacket {
-            r#type: String::from("COLOR-SWITCH"),
+            r#type: PacketType::ColorSwitch,
             color,
         }
     }
@@ -287,7 +341,7 @@ impl ColorSwitchPacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TurnUpdatePacket {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub id: Uuid,
     pub next: Uuid,
 }
@@ -295,7 +349,7 @@ pub struct TurnUpdatePacket {
 impl TurnUpdatePacket {
     pub fn new(id: Uuid, next: Uuid) -> TurnUpdatePacket {
         TurnUpdatePacket {
-            r#type: String::from("UPDATE-TURN"),
+            r#type: PacketType::TurnUpdate,
             id,
             next,
         }
@@ -311,7 +365,7 @@ impl TurnUpdatePacket {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HTMLError {
-    pub r#type: String,
+    pub r#type: PacketType,
     pub status_code: u64,
     pub body: String,
 }
@@ -327,9 +381,10 @@ impl HTMLError {
 
     pub fn new(status_code: u64, body: &str) -> HTMLError {
         HTMLError {
-            r#type: String::from("ERROR"),
+            r#type: PacketType::Error,
             status_code,
             body: String::from(body),
         }
     }
 }
+*/

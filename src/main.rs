@@ -4,7 +4,6 @@ mod packets;
 use anyhow::Error;
 use game::{Card, Player};
 use packets::*;
-use serde_json::Value;
 use std::collections::HashMap;
 
 use uuid::Uuid;
@@ -26,6 +25,7 @@ struct Model {
     username: Option<String>,
     room_id: Option<String>,
     server_data: String,
+    chat: Vec<ServerMessage>,
     connections: HashMap<Uuid, Player>,
     connection_count: usize,
     cards: Vec<Card>,
@@ -48,6 +48,13 @@ enum Msg {
     HoverCard(bool),
 }
 
+enum ServerMessage {
+    Join(String),
+    Leave(String),
+    Message(String, String),
+    Error(String),
+}
+
 impl Component for Model {
     type Message = Msg;
     type Properties = ();
@@ -66,8 +73,9 @@ impl Component for Model {
             username: None,
             room_id: Some("c05554ae-b4ee-4976-ac05-97aaf3c98a24".to_string()),
             server_data: String::new(),
+            chat: Vec::new(),
             connections: HashMap::new(),
-            connection_count: 0,
+            connection_count: 1,
             cards: Vec::new(),
             allowed_cards: Vec::new(),
             current: None,
@@ -99,6 +107,7 @@ impl Component for Model {
             }
             Msg::Disconnected => {
                 self.ws = None;
+                self.connected = false;
                 true
             }
             Msg::Ignore => false,
@@ -112,9 +121,9 @@ impl Component for Model {
             }
             Msg::Register => match self.ws {
                 Some(ref mut task) => {
-                    task.send::<Text>(Text::into(Ok(RegisterPacket::to_json(
-                        RegisterPacket::new(self.username.as_ref().unwrap()),
-                    ))));
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::Register(
+                        self.username.clone().unwrap_or("player".to_string()),
+                    )))));
                     self.connected = true;
 
                     true
@@ -123,137 +132,107 @@ impl Component for Model {
             },
             Msg::StartGame => match self.ws {
                 Some(ref mut task) => {
-                    task.send::<Text>(Text::into(Ok(StartPacket::to_json(StartPacket::new(
-                        "None",
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::StartGame(
+                        "None".to_string(),
                     )))));
                     true
                 }
                 None => false,
             },
             Msg::Received(Ok(s)) => {
-                let json: serde_json::Result<Value> = serde_json::from_str(&s);
+                let json: Result<PacketType, serde_json::Error> = serde_json::from_str(&s);
 
-                if let Ok(data) = json {
-                    if let Some(r#type) = data.get("type") {
-                        match &r#type.to_string() as &str {
-                            // Message event
-                            "\"CONNECT\"" => {
-                                let p = ConnectPacket::try_parse(&s);
-                                self.connection_count += 1;
-
-                                if let Ok(packet) = p {
-                                    self.server_data
-                                        .push_str(&format!("[CONNECT] {:#?}\n", packet.username));
-                                }
-                            }
-                            "\"DISCONNECT\"" => {
-                                let p = DisconnectPacket::try_parse(&s);
-                                self.connection_count -= 1;
-
-                                if let Ok(packet) = p {
-                                    self.server_data.push_str(&format!(
-                                        "[DISCONNECT] {:#?}\n",
-                                        packet.username
-                                    ));
-                                }
-                            }
-                            "\"MESSAGE\"" => {
-                                let p = MessagePacket::try_parse(&s);
-
-                                if let Ok(packet) = p {
-                                    if packet.content == "You are the host" {
-                                        self.host = true;
-                                    }
-
-                                    self.server_data
-                                        .push_str(&format!("[MESSAGE] {:#?}", packet.content));
-                                }
-                            }
-                            "\"STATUS-UPDATE-PRIVATE\"" => {
-                                let p = PrivateGamePacket::try_parse(&s);
-
-                                if !self.active {
-                                    self.active = true;
-                                }
-
-                                if let Ok(packet) = p {
-                                    // Insert connection to the connection list
-
-                                    self.cards = packet.cards.clone();
-
-                                    self.server_data
-                                        .push_str(&format!("[CARDS] {:#?}", &packet.cards));
-
-                                    self.current = Some(packet.current);
-                                }
-                            }
-                            "\"STATUS-UPDATE-PUBLIC\"" => {
-                                let p = PublicGamePacket::try_parse(&s);
-                                let count = self.connections.len();
-
-                                if let Ok(packet) = p {
-                                    self.server_data
-                                        .push_str(&format!("[CURRENT] {:#?}", packet.current));
-
+                if let Ok(packet) = json {
+                    match packet {
+                        PacketType::Register(_) => {}
+                        PacketType::GameData(self_id, _self_username, connections) => {
+                            connections.iter().for_each(|(id, username)| {
+                                if id != &self_id {
                                     // Insert connection to the connection list
                                     if let std::collections::hash_map::Entry::Vacant(e) =
-                                        self.connections.entry(packet.id)
+                                        self.connections.entry(*id)
                                     {
-                                        e.insert(Player::new(packet.username, packet.cards, count));
-                                    }
-
-                                    self.connections.get_mut(&packet.id).unwrap().card_count =
-                                        packet.cards;
-
-                                    self.current = Some(packet.current);
-                                }
-                            }
-                            "\"ALLOWED-CARDS-UPDATE\"" => {
-                                let p = AllowedCardsPacket::try_parse(&s);
-                                if let Ok(packet) = p {
-                                    self.server_data
-                                        .push_str(&format!("[ALLOWED] {:#?}", packet.cards));
-                                    // Insert connection to the connection list
-                                    self.allowed_cards = packet.cards;
-                                    self.turn = true;
-                                }
-                            }
-                            "\"END-TURN\"" => {
-                                let p = EndTurnPacket::try_parse(&s);
-                                if p.is_ok() {
-                                    ConsoleService::log("[MESSAGE] Your turn has ended.");
-                                    self.allowed_cards.clear();
-                                    self.turn = false;
-                                }
-                            }
-                            "\"UPDATE-TURN\"" => {
-                                let p = TurnUpdatePacket::try_parse(&s);
-                                ConsoleService::log("Updated turn");
-                                if let Ok(packet) = p {
-                                    self.connections.iter_mut().for_each(|p| {
-                                        p.1.turn = &packet.id == p.0;
-                                        p.1.next = &packet.next == p.0;
-                                    });
-
-                                    if !self.connections.contains_key(&packet.next) {
-                                        self.next = true;
-                                    } else {
-                                        self.next = false;
+                                        e.insert(Player::new(
+                                            username.clone(),
+                                            0,
+                                            self.connection_count,
+                                        ));
                                     }
                                 }
-                            }
-                            "\"ERROR\"" => {
-                                let p = HTMLError::try_parse(&s);
-
-                                if let Ok(e) = p {
-                                    self.server_data.push_str(&format!("[ERROR] {:#?}", e));
-                                }
-                            }
-                            _ => ConsoleService::log("Unknown packet received"),
+                            });
                         }
+                        PacketType::Connect(id, username) => {
+                            self.connection_count += 1;
 
-                        // ConsoleService::log(&format!("{:?}", s));
-                        // self.server_data.push_str(&format!("{}\n", &s));
+                            self.chat.push(ServerMessage::Join(username.clone()));
+
+                            // Insert connection to the connection list
+                            if let std::collections::hash_map::Entry::Vacant(e) =
+                                self.connections.entry(id)
+                            {
+                                e.insert(Player::new(username, 0, self.connection_count));
+                            }
+                        }
+                        PacketType::Disconnect(id, username) => {
+                            self.connection_count -= 1;
+
+                            self.chat.push(ServerMessage::Leave(username));
+
+                            self.connections.remove(&id);
+                        }
+                        PacketType::Message(content) => {
+                            if content == "You are the host" {
+                                self.host = true;
+                            }
+
+                            self.chat
+                                .push(ServerMessage::Message("Unknown".to_string(), content));
+                        }
+                        PacketType::StartGame(_) => {}
+                        PacketType::StatusUpdatePublic(id, _username, card_count, current) => {
+                            self.server_data
+                                .push_str(&format!("[CURRENT] {:#?}", current));
+
+                            self.connections.get_mut(&id).unwrap().card_count = card_count;
+                            self.active = true;
+                            self.current = Some(current);
+                        }
+                        PacketType::StatusUpdatePrivate(cards, current) => {
+                            self.server_data.push_str(&format!("[CARDS] {:#?}", &cards));
+
+                            self.cards = cards;
+                            self.current = Some(current);
+                        }
+                        PacketType::AllowedCardsUpdate(cards) => {
+                            self.server_data
+                                .push_str(&format!("[ALLOWED] {:#?}", cards));
+
+                            self.allowed_cards = cards;
+                            self.turn = true;
+                        }
+                        PacketType::DrawCard(_) => {}
+                        PacketType::PlaceCard(_) => {}
+                        PacketType::EndTurn => {
+                            ConsoleService::log("[MESSAGE] Your turn has ended.");
+                            self.allowed_cards.clear();
+                            self.turn = false;
+                        }
+                        PacketType::ColorSwitch(_) => todo!(),
+                        PacketType::TurnUpdate(id, next) => {
+                            self.connections.iter_mut().for_each(|p| {
+                                p.1.turn = &id == p.0;
+                                p.1.next = &next == p.0;
+                            });
+
+                            if !self.connections.contains_key(&next) {
+                                self.next = true;
+                            } else {
+                                self.next = false;
+                            }
+                        }
+                        PacketType::Error(_code, body) => {
+                            self.chat.push(ServerMessage::Error(body));
+                        }
                     }
                 }
 
@@ -266,10 +245,8 @@ impl Component for Model {
             Msg::PlaceCard(card) => {
                 let index = self.cards.iter().position(|c| c == &card).unwrap();
 
-                let p = PlaceCardPacket::new(index);
-
                 if let Some(ref mut task) = self.ws {
-                    task.send::<Text>(Text::into(Ok(PlaceCardPacket::to_json(p))));
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::PlaceCard(index)))));
                 }
 
                 if card.r#type == "Switch" || card.r#type == "DrawFour" {
@@ -280,28 +257,24 @@ impl Component for Model {
             }
             Msg::DrawCard => {
                 ConsoleService::log("drawing a card");
-                let p = DrawPacket::new(1);
 
                 if let Some(ref mut task) = self.ws {
-                    task.send::<Text>(Text::into(Ok(DrawPacket::to_json(p))));
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::DrawCard(1)))));
                 }
 
                 true
             }
             Msg::EndTurn => {
-                let p = EndTurnPacket::new();
                 ConsoleService::log("Ending turn..");
                 if let Some(ref mut task) = self.ws {
-                    task.send::<Text>(Text::into(Ok(EndTurnPacket::to_json(p))));
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::EndTurn))));
                 }
 
                 true
             }
             Msg::SwitchColor(color) => {
-                let p = ColorSwitchPacket::new(color);
-
                 if let Some(ref mut task) = self.ws {
-                    task.send::<Text>(Text::into(Ok(ColorSwitchPacket::to_json(p))));
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::ColorSwitch(color)))));
                     self.selecting = false;
                 }
 
@@ -433,9 +406,58 @@ impl Component for Model {
                     <textarea>{self.server_data.to_string()}</textarea>
                 </div>
 
+                <div class="chat">
+                {
+                    for self.chat.iter().map(|message| {
+
+                        match message {
+                            ServerMessage::Join(username) => {
+                                html! {
+                                    <div class="chat-object">
+                                        <h3 id="connection">{"[Connected]"}</h3>
+                                        <h2>{username}</h2>
+                                    </div>
+                                }
+                            },
+                            ServerMessage::Leave(username) => {
+                                html! {
+                                    <div class="chat-object">
+                                    <h3 id="connection">{"[Disconnected]"}</h3>
+                                    <h2>{username}</h2>
+                                </div>
+                                }
+                            },
+                            ServerMessage::Message(username, content) => {
+                                html! {
+                                    <div class="chat-object">
+                                        <h3 id="message">{"[Message]"}</h3>
+                                        <h2>{username}</h2>
+                                        <h1>{content}</h1>
+                                    </div>
+                                }
+                            },
+                            ServerMessage::Error(body) => {
+                                html! {
+                                    <div class="chat-object">
+                                        <h3 id="error">{"[Error]"}</h3>
+                                        <h2>{"Server"}</h2>
+                                        <h1>{body}</h1>
+                                    </div>
+                                }
+                            },
+                        }
+                    })
+                }
+                </div>
+
             </div>
+
         }
     }
+}
+
+pub fn to_json(data: PacketType) -> String {
+    serde_json::to_string(&data).unwrap()
 }
 
 fn main() {
