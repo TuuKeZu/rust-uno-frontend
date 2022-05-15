@@ -1,3 +1,5 @@
+use std::{collections::VecDeque, time::SystemTime};
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -37,4 +39,41 @@ impl Player {
             next: false,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameStatistics {
+    pub start_time: Option<SystemTime>,
+    pub end_time: Option<SystemTime>,
+    pub player_count: usize,
+    pub spectator_count: usize,
+    pub cards_placed: usize,
+    pub cards_drawn: usize,
+}
+
+impl GameStatistics {
+    pub fn new() -> GameStatistics {
+        GameStatistics {
+            start_time: None,
+            end_time: None,
+            player_count: 0,
+            spectator_count: 0,
+            cards_placed: 0,
+            cards_drawn: 0,
+        }
+    }
+}
+
+impl Default for GameStatistics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EndStatus {
+    pub winner_id: Uuid,
+    pub winner: String,
+    pub placements: VecDeque<String>,
+    pub statistics: GameStatistics,
 }

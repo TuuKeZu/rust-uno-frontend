@@ -2,9 +2,11 @@ mod game;
 mod packets;
 
 use anyhow::Error;
-use game::{Card, Player};
+use game::{Card, EndStatus, GameStatistics, Player};
 use packets::*;
 use std::collections::HashMap;
+use std::time::SystemTime;
+use time::OffsetDateTime;
 
 use uuid::Uuid;
 use yew::format::Text;
@@ -15,13 +17,17 @@ use yew::services::ConsoleService;
 struct Model {
     ws: Option<WebSocketTask>,
     link: ComponentLink<Self>,
+
     connected: bool,
+    registered: bool,
     host: bool,
     active: bool,
+    ended: bool,
     turn: bool,
     next: bool,
     selecting: bool,
     hovering: bool,
+
     username: Option<String>,
     room_id: Option<String>,
     server_data: String,
@@ -31,10 +37,13 @@ struct Model {
     cards: Vec<Card>,
     allowed_cards: Vec<Card>,
     current: Option<Card>,
+
+    end_status: Option<EndStatus>,
 }
 enum Msg {
     Connect,
     Disconnected,
+    Connected,
     Ignore,
     UsernameInput(String),
     RoomIDInput(String),
@@ -46,6 +55,7 @@ enum Msg {
     EndTurn,
     SwitchColor(String),
     HoverCard(bool),
+    Error(String),
 }
 
 enum ServerMessage {
@@ -64,8 +74,10 @@ impl Component for Model {
             ws: None,
             link,
             connected: false,
+            registered: false,
             host: false,
             active: false,
+            ended: false,
             turn: false,
             next: false,
             selecting: false,
@@ -79,6 +91,7 @@ impl Component for Model {
             cards: Vec::new(),
             allowed_cards: Vec::new(),
             current: None,
+            end_status: None,
         }
     }
 
@@ -91,8 +104,11 @@ impl Component for Model {
                 let cbnot = self.link.callback(|input| {
                     ConsoleService::log(&format!("Notification: {:?}", input));
                     match input {
-                        WebSocketStatus::Closed | WebSocketStatus::Error => Msg::Disconnected,
-                        _ => Msg::Ignore,
+                        WebSocketStatus::Closed => Msg::Disconnected,
+                        WebSocketStatus::Error => {
+                            Msg::Error("Failed to connect to servers".to_string())
+                        }
+                        _ => Msg::Connected,
                     }
                 });
                 if self.ws.is_none() {
@@ -110,6 +126,10 @@ impl Component for Model {
                 self.connected = false;
                 true
             }
+            Msg::Connected => {
+                self.connected = true;
+                true
+            }
             Msg::Ignore => false,
             Msg::UsernameInput(e) => {
                 self.username = Some(e);
@@ -124,8 +144,6 @@ impl Component for Model {
                     task.send::<Text>(Text::into(Ok(to_json(PacketType::Register(
                         self.username.clone().unwrap_or("player".to_string()),
                     )))));
-                    self.connected = true;
-
                     true
                 }
                 None => false,
@@ -146,6 +164,8 @@ impl Component for Model {
                     match packet {
                         PacketType::Register(_) => {}
                         PacketType::GameData(self_id, _self_username, connections) => {
+                            self.registered = true;
+
                             connections.iter().for_each(|(id, username)| {
                                 if id != &self_id {
                                     // Insert connection to the connection list
@@ -188,7 +208,7 @@ impl Component for Model {
                             self.chat
                                 .push(ServerMessage::Message("Unknown".to_string(), content));
                         }
-                        PacketType::StartGame(_) => {}
+                        PacketType::StartGame(_) => {} // will never be received by client
                         PacketType::StatusUpdatePublic(id, _username, card_count, current) => {
                             self.server_data
                                 .push_str(&format!("[CURRENT] {:#?}", current));
@@ -210,8 +230,8 @@ impl Component for Model {
                             self.allowed_cards = cards;
                             self.turn = true;
                         }
-                        PacketType::DrawCard(_) => {}
-                        PacketType::PlaceCard(_) => {}
+                        PacketType::DrawCard(_) => {} // will never be received by client
+                        PacketType::PlaceCard(_) => {} // will never be received by client
                         PacketType::EndTurn => {
                             ConsoleService::log("[MESSAGE] Your turn has ended.");
                             self.allowed_cards.clear();
@@ -232,6 +252,15 @@ impl Component for Model {
                         }
                         PacketType::Error(_code, body) => {
                             self.chat.push(ServerMessage::Error(body));
+                        }
+                        PacketType::WinUpdate(id, username, placements, statistics) => {
+                            self.end_status = Some(EndStatus {
+                                winner_id: id,
+                                winner: username,
+                                placements,
+                                statistics,
+                            });
+                            self.ended = true;
                         }
                     }
                 }
@@ -284,6 +313,11 @@ impl Component for Model {
                 self.hovering = active;
                 true
             }
+            Msg::Error(e) => {
+                self.chat.push(ServerMessage::Error(e.clone()));
+                ConsoleService::log(&e);
+                false
+            }
         }
     }
 
@@ -296,7 +330,7 @@ impl Component for Model {
             // <div></div>
             <div class="container">
                 // login screen element
-                <div class="connect-screen" style={format!("display: {}", if !self.connected {"flex"} else {"none"})}>
+                <div class="connect-screen" style={format!("display: {}", if !self.registered {"flex"} else {"none"})}>
                     <h1>{"Enter Room ID"}</h1>
                     // room id
                     <input type="text" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/><br/>
@@ -316,7 +350,7 @@ impl Component for Model {
 
                 </div>
 
-                <div class="waiting-screen" style={format!("display: {}", if self.connected && !self.active {"flex"} else {"none"})} >
+                <div class="waiting-screen" style={format!("display: {}", if self.registered && !self.active {"flex"} else {"none"})} >
                     <h1>{"Waiting for game to start"}</h1>
 
                     <p hidden={!self.host}>{"You are the host"}</p>
@@ -392,6 +426,7 @@ impl Component for Model {
                         })
                     }
                 </div>
+
                 <div class="color-selector" style={format!("display: {}", if self.selecting {"flex"} else {"none"})}>
                     <h1>{"Select the color you want to switch to"}</h1>
                     <button onclick=self.link.callback(|_| Msg::SwitchColor("Yellow".to_string())) class="card" id="color" style="background-image: url(static/img/Selector.Yellow.svg"></button>
@@ -400,6 +435,40 @@ impl Component for Model {
                     <button onclick=self.link.callback(|_| Msg::SwitchColor("Green".to_string())) class="card" id="color" style="background-image: url(static/img/Selector.Green.svg"></button>
                 </div>
 
+                {
+                    if self.end_status.is_some() {
+                        let status = self.end_status.as_ref().unwrap();
+
+                        // Get the game duration as seconds and format it to {min:s} format
+                        let duration = (status.statistics.end_time.unwrap().duration_since(status.statistics.start_time.unwrap())).unwrap().as_secs() as f64;
+                        let (minutes, seconds) = ((duration / 60.0).floor(), (((duration / 60.0) - (duration / 60.0).floor()) * 60.0).round());
+
+                        html! {
+                            <div class="win-screen" style={format!("display: {}", if self.ended {"flex"} else {"none"})} >
+                                <h2>{"Game Ended"}</h2>
+
+                                <ul><a>{"Game lasted "}</a><a class="highlight">{format!("{}min {}s", minutes, seconds)}</a></ul>
+                                <ul><a class="highlight">{status.statistics.player_count}</a><a>{" players took part"}</a></ul>
+                                <ul><a class="highlight">{status.statistics.spectator_count}</a><a>{" spectators took part"}</a></ul>
+                                <ul><a class="highlight">{status.statistics.cards_drawn}</a><a>{" cards were drawn"}</a></ul>
+                                <ul><a class="highlight">{status.statistics.cards_placed}</a><a>{" cards were placed"}</a></ul>
+
+                                <h1>{format!("{} won", status.winner)}</h1>
+                                {
+                                    for status.placements.iter().map(|username| {
+                                        let index = status.placements.iter().position(|u| u == username).unwrap() + 2;
+                                        html!{
+                                            <h3>{format!("{}. {}", index, username)}</h3>
+                                        }
+                                    })
+                                }
+                            </div>
+                        }
+                    }
+                    else {
+                        html! {}
+                    }
+                }
 
                 <div class="side-bar" >
                     // text area for showing data from the server
