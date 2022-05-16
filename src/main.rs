@@ -30,8 +30,8 @@ struct Model {
 
     username: Option<String>,
     room_id: Option<String>,
-    server_data: String,
     chat: Vec<ServerMessage>,
+    chat_input: String,
     connections: HashMap<Uuid, Player>,
     connection_count: usize,
     cards: Vec<Card>,
@@ -44,11 +44,13 @@ enum Msg {
     Connect,
     Disconnected,
     Connected,
-    Ignore,
     UsernameInput(String),
     RoomIDInput(String),
+    ChatInput(String),
     Register,
     StartGame,
+    sendMessage,
+    LeaveGame,
     Received(Result<String, Error>),
     PlaceCard(Card),
     DrawCard,
@@ -84,8 +86,8 @@ impl Component for Model {
             hovering: false,
             username: None,
             room_id: Some("c05554ae-b4ee-4976-ac05-97aaf3c98a24".to_string()),
-            server_data: String::new(),
             chat: Vec::new(),
+            chat_input: String::new(),
             connections: HashMap::new(),
             connection_count: 1,
             cards: Vec::new(),
@@ -101,19 +103,21 @@ impl Component for Model {
                 ConsoleService::log("Connecting");
 
                 let cbout = self.link.callback(Msg::Received);
-                let cbnot = self.link.callback(|input| {
-                    ConsoleService::log(&format!("Notification: {:?}", input));
-                    match input {
-                        WebSocketStatus::Closed => Msg::Disconnected,
-                        WebSocketStatus::Error => {
-                            Msg::Error("Failed to connect to servers".to_string())
-                        }
-                        _ => Msg::Connected,
+                let cbnot = self.link.callback(|input| match input {
+                    WebSocketStatus::Closed => Msg::Disconnected,
+                    WebSocketStatus::Error => {
+                        Msg::Error("Failed to connect to servers".to_string())
                     }
+                    _ => Msg::Connected,
                 });
                 if self.ws.is_none() {
                     let task = WebSocketService::connect_text(
-                        "ws://127.0.0.1:8090/c05554ae-b4ee-4976-ac05-97aaf3c98a24",
+                        &format!(
+                            "ws://127.0.0.1:8090/{}",
+                            self.room_id
+                                .clone()
+                                .expect("Cannot join game with the room_id 'None'")
+                        ),
                         cbout,
                         cbnot,
                     );
@@ -130,13 +134,16 @@ impl Component for Model {
                 self.connected = true;
                 true
             }
-            Msg::Ignore => false,
             Msg::UsernameInput(e) => {
                 self.username = Some(e);
                 true
             }
             Msg::RoomIDInput(e) => {
                 self.room_id = Some(e);
+                true
+            }
+            Msg::ChatInput(e) => {
+                self.chat_input = e;
                 true
             }
             Msg::Register => match self.ws {
@@ -157,6 +164,39 @@ impl Component for Model {
                 }
                 None => false,
             },
+            Msg::sendMessage => match self.ws {
+                Some(ref mut task) => {
+                    task.send::<Text>(Text::into(Ok(to_json(PacketType::Message(
+                        self.username.clone().unwrap_or("Unknown".to_string()),
+                        self.chat_input.clone(),
+                    )))));
+                    self.chat_input = String::new();
+                    true
+                }
+                None => false,
+            },
+            Msg::LeaveGame => {
+                self.ws = None;
+                self.connected = false;
+                self.registered = false;
+                self.host = false;
+                self.active = false;
+                self.ended = false;
+                self.turn = false;
+                self.next = false;
+
+                self.username = None;
+                self.room_id = Some("c05554ae-b4ee-4976-ac05-97aaf3c98a24".to_string());
+                self.chat = Vec::new();
+                self.connections = HashMap::new();
+                self.connection_count = 1;
+                self.cards = Vec::new();
+                self.allowed_cards = Vec::new();
+                self.current = None;
+                self.end_status = None;
+
+                true
+            }
             Msg::Received(Ok(s)) => {
                 let json: Result<PacketType, serde_json::Error> = serde_json::from_str(&s);
 
@@ -200,33 +240,24 @@ impl Component for Model {
 
                             self.connections.remove(&id);
                         }
-                        PacketType::Message(content) => {
+                        PacketType::Message(username, content) => {
                             if content == "You are the host" {
                                 self.host = true;
                             }
 
-                            self.chat
-                                .push(ServerMessage::Message("Unknown".to_string(), content));
+                            self.chat.push(ServerMessage::Message(username, content));
                         }
                         PacketType::StartGame(_) => {} // will never be received by client
                         PacketType::StatusUpdatePublic(id, _username, card_count, current) => {
-                            self.server_data
-                                .push_str(&format!("[CURRENT] {:#?}", current));
-
                             self.connections.get_mut(&id).unwrap().card_count = card_count;
                             self.active = true;
                             self.current = Some(current);
                         }
                         PacketType::StatusUpdatePrivate(cards, current) => {
-                            self.server_data.push_str(&format!("[CARDS] {:#?}", &cards));
-
                             self.cards = cards;
                             self.current = Some(current);
                         }
                         PacketType::AllowedCardsUpdate(cards) => {
-                            self.server_data
-                                .push_str(&format!("[ALLOWED] {:#?}", cards));
-
                             self.allowed_cards = cards;
                             self.turn = true;
                         }
@@ -268,8 +299,8 @@ impl Component for Model {
                 true
             }
             Msg::Received(Err(s)) => {
-                self.server_data.push_str(&format!("[ERROR] {:#?}", &s));
-                true
+                ConsoleService::error(&format!("Received invalid data from the server! {}", s));
+                false
             }
             Msg::PlaceCard(card) => {
                 let index = self.cards.iter().position(|c| c == &card).unwrap();
@@ -332,26 +363,21 @@ impl Component for Model {
                 // login screen element
                 <div class="connect-screen" style={format!("display: {}", if !self.registered {"flex"} else {"none"})}>
                     <h1>{"Enter Room ID"}</h1>
-                    // room id
-                    <input type="text" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/><br/>
-
-                    // connect button
+                    <input type="text" placeholder="Please enter a valid room-id" value=self.room_id.clone() oninput=self.link.callback(|e: InputData| Msg::RoomIDInput(e.value))/><br/>
                     <button disabled={self.room_id.is_none() ||self.room_id == Some("".to_string())} onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
 
                     <h1 hidden={self.ws.is_none()}>{"Enter your username"}</h1>
-
-                    // username
-                    <input hidden={self.ws.is_none()} type="text" value=self.username.clone() oninput=self.link.callback(|e: InputData| Msg::UsernameInput(e.value))/>
-
+                    <input hidden={self.ws.is_none()} type="text" placeholder="Please enter a valid username" value=self.username.clone() oninput=self.link.callback(|e: InputData| Msg::UsernameInput(e.value))/>
                     <button hidden={self.ws.is_none()} disabled={self.username.is_none() || self.username == Some("".to_string())} onclick=self.link.callback(|_| Msg::Register)>{ "Register" }</button>
 
-                    // text showing whether we're connected or not
-                    <p class="connection-status">{ "Connected: "}{ self.ws.is_some() } </p>
+                    <ul class="connection-status"><a>{ "Connected: "}</a><a style={if self.ws.is_none() {"color: var(--red)"} else {"color: var(--green)"}}>{ self.ws.is_some() }</a></ul>
 
                 </div>
 
                 <div class="waiting-screen" style={format!("display: {}", if self.registered && !self.active {"flex"} else {"none"})} >
                     <h1>{"Waiting for game to start"}</h1>
+                    <h2>{"This room's ID"}</h2>
+                    <h3>{self.room_id.clone().unwrap_or("Invalid ID, please refresh your page.".to_string())}</h3>
 
                     <p hidden={!self.host}>{"You are the host"}</p>
                     <button hidden={!self.host} disabled={self.connection_count <= 1} onclick=self.link.callback(|_| Msg::StartGame)>{ "Start game" }</button>
@@ -462,6 +488,7 @@ impl Component for Model {
                                         }
                                     })
                                 }
+                                <button onclick=self.link.callback(|_| Msg::LeaveGame)>{"Continue"}</button>
                             </div>
                         }
                     }
@@ -469,11 +496,6 @@ impl Component for Model {
                         html! {}
                     }
                 }
-
-                <div class="side-bar" >
-                    // text area for showing data from the server
-                    <textarea>{self.server_data.to_string()}</textarea>
-                </div>
 
                 <div class="chat">
                 {
@@ -517,6 +539,10 @@ impl Component for Model {
                         }
                     })
                 }
+                    <div class="chat-input">
+                            <input type="text" placeholder="Send a message to chat" value=self.chat_input.clone() oninput=self.link.callback(|e: InputData| Msg::ChatInput(e.value))/>
+                            <button type="submit" onclick=self.link.callback(|_| Msg::sendMessage)>{"Send"}</button>
+                    </div>
                 </div>
 
             </div>
